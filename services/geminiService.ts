@@ -1,7 +1,9 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Persona, CameraSettings, CreatorAttributes } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize with a fallback to prevent crash if process.env.API_KEY is empty during dev/build.
+// The actual API calls will fail gracefully with an auth error if the key is invalid.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key_for_init" });
 
 const cleanBase64 = (base64Data: string): string => {
   return base64Data.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
