@@ -50,8 +50,11 @@ export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<
       }
     });
 
-    if (response.candidates && response.candidates.length > 0) {
-      const parts = response.candidates[0].content.parts;
+    // Safely access candidates and parts with optional chaining
+    const candidate = response.candidates?.[0];
+    const parts = candidate?.content?.parts;
+
+    if (parts) {
       for (const part of parts) {
         if (part.inlineData && part.inlineData.data) {
           return `data:image/png;base64,${part.inlineData.data}`;
@@ -189,8 +192,11 @@ const generateSingleImage = async (referenceImageBase64: string, prompt: string)
     }
   });
 
-  if (response.candidates && response.candidates.length > 0) {
-    const parts = response.candidates[0].content.parts;
+  // Safely access candidates and parts with optional chaining
+  const candidate = response.candidates?.[0];
+  const parts = candidate?.content?.parts;
+
+  if (parts) {
     for (const part of parts) {
       if (part.inlineData && part.inlineData.data) {
         return `data:image/png;base64,${part.inlineData.data}`;
