@@ -1,9 +1,14 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Persona, CameraSettings, CreatorAttributes } from "../types";
 
-// Initialize with a fallback to prevent crash if process.env.API_KEY is empty during dev/build.
-// The actual API calls will fail gracefully with an auth error if the key is invalid.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key_for_init" });
+// Helper to get the AI client with the latest key
+const getAIClient = () => {
+  // Check Local Storage first (User setting), then Env (Build setting)
+  const apiKey = localStorage.getItem('GEMINI_API_KEY') || process.env.API_KEY;
+  
+  // Return client with key (or empty string which will fail gracefully in the call if missing)
+  return new GoogleGenAI({ apiKey: apiKey || "" });
+};
 
 const cleanBase64 = (base64Data: string): string => {
   return base64Data.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
@@ -13,6 +18,8 @@ const cleanBase64 = (base64Data: string): string => {
  * Step 0: Generate a base Reference Image from scratch (Maker Mode)
  */
 export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<string> => {
+  const ai = getAIClient();
+  
   // Construct a detailed prompt based on the new attributes
   // Refined to focus on visual descriptions rather than strict biometrics to avoid safety filters
   const prompt = `
@@ -77,6 +84,7 @@ export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<
  * Step 1: Analyze the image to create a Detailed Persona (IN KOREAN)
  */
 export const analyzePersona = async (referenceImageBase64: string): Promise<Persona> => {
+  const ai = getAIClient();
   const prompt = `
     이 사진 속 인물의 시각적 특징을 깊이 분석하여 구체적인 "인플루언서 페르소나"를 설정해주세요.
     응답은 반드시 **한국어(Korean)**로 작성해야 합니다.
@@ -127,6 +135,7 @@ export const analyzePersona = async (referenceImageBase64: string): Promise<Pers
  * Step 2: Plan the story (Generate 8 prompts) using the detailed persona
  */
 export const planStory = async (persona: Persona, userScenario?: string): Promise<string[]> => {
+  const ai = getAIClient();
   const baseContext = `
     We are creating a photo series (8 images) for a virtual influencer.
     
@@ -172,6 +181,7 @@ export const planStory = async (persona: Persona, userScenario?: string): Promis
  * Helper: Generate image from prompt
  */
 const generateSingleImage = async (referenceImageBase64: string, prompt: string): Promise<string> => {
+  const ai = getAIClient();
   const fullPrompt = `
     Generate a photorealistic influencer photo based on the reference person.
     
@@ -214,6 +224,7 @@ export const generateStudioImage = async (
   settings: CameraSettings,
   persona: Persona
 ): Promise<{ url: string; prompt: string }> => {
+  const ai = getAIClient();
   
   // Construct camera prompt
   let cameraDescription = "";

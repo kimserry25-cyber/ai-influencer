@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Info, AlertTriangle, Loader2, Camera, Clapperboard, UserPlus } from 'lucide-react';
+import { Sparkles, Info, AlertTriangle, Loader2, Camera, Clapperboard, UserPlus, Settings } from 'lucide-react';
 import PhotoUploader from './components/PhotoUploader';
 import Controls from './components/Controls';
 import CameraControls from './components/CameraControls';
 import ResultGallery from './components/ResultGallery';
 import PersonaCard from './components/PersonaCard';
 import PersonaCreator from './components/PersonaCreator';
+import SettingsModal from './components/SettingsModal';
 import { Persona, StoryBatch, AppState, CameraSettings, CreatorAttributes } from './types';
 import { analyzePersona, planStory, generateStoryBatch, generateStudioImage, generateReferenceImage } from './services/geminiService';
 
@@ -30,12 +31,19 @@ const App: React.FC = () => {
   
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [error, setError] = useState<string | null>(null);
-  const [apiKeyError, setApiKeyError] = useState(false);
+  
+  // Settings State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+
+  const checkApiKey = () => {
+    const localKey = localStorage.getItem('GEMINI_API_KEY');
+    const envKey = process.env.API_KEY;
+    setHasApiKey(!!localKey || !!envKey);
+  };
 
   useEffect(() => {
-    if (!process.env.API_KEY) {
-      setApiKeyError(true);
-    }
+    checkApiKey();
   }, []);
 
   // When image uploads, analyze persona immediately
@@ -53,7 +61,7 @@ const App: React.FC = () => {
       setAppState(AppState.IDLE);
     } catch (err: any) {
       console.error(err);
-      setError("Could not analyze persona. Please try a clearer photo.");
+      setError("Could not analyze persona. Please try a clearer photo or check your API key.");
       setAppState(AppState.ERROR);
     }
   };
@@ -157,6 +165,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-purple-500/30">
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)}
+        onSave={checkApiKey}
+      />
+
       {/* Navbar - Updated Color to #9B69FF */}
       <nav className="bg-[#9B69FF] sticky top-0 z-50 shadow-lg transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -168,25 +183,36 @@ const App: React.FC = () => {
               Influencer<span className="text-white/90">AI</span>
             </h1>
           </div>
-          <div className="flex items-center gap-1 bg-black/20 p-1 rounded-full border border-white/10 backdrop-blur-sm">
-             <button 
-               onClick={() => setActiveTab('story')}
-               className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'story' ? 'bg-white text-[#9B69FF] shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
-             >
-               <Clapperboard size={14} /> Story Mode
-             </button>
-             <button 
-               onClick={() => setActiveTab('studio')}
-               className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'studio' ? 'bg-white text-[#9B69FF] shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
-             >
-               <Camera size={14} /> Studio Mode
-             </button>
-             <button 
-               onClick={() => setActiveTab('maker')}
-               className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'maker' ? 'bg-white text-[#9B69FF] shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
-             >
-               <UserPlus size={14} /> Maker
-             </button>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 bg-black/20 p-1 rounded-full border border-white/10 backdrop-blur-sm">
+              <button 
+                onClick={() => setActiveTab('story')}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'story' ? 'bg-white text-[#9B69FF] shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+              >
+                <Clapperboard size={14} /> Story Mode
+              </button>
+              <button 
+                onClick={() => setActiveTab('studio')}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'studio' ? 'bg-white text-[#9B69FF] shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+              >
+                <Camera size={14} /> Studio Mode
+              </button>
+              <button 
+                onClick={() => setActiveTab('maker')}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'maker' ? 'bg-white text-[#9B69FF] shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+              >
+                <UserPlus size={14} /> Maker
+              </button>
+            </div>
+            
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+              title="Settings"
+            >
+              <Settings size={20} />
+            </button>
           </div>
         </div>
       </nav>
@@ -194,13 +220,19 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-10">
         
-        {apiKeyError && (
+        {!hasApiKey && (
            <div className="mb-8 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3 text-red-200">
              <AlertTriangle className="shrink-0" />
-             <div>
+             <div className="flex-1">
                <p className="font-bold">Missing API Key</p>
-               <p className="text-sm opacity-80">This app requires a valid Gemini API key in `process.env.API_KEY` to function.</p>
+               <p className="text-sm opacity-80">This app requires a valid Gemini API key. Please configure it in Settings.</p>
              </div>
+             <button 
+                onClick={() => setIsSettingsOpen(true)}
+                className="bg-red-500/20 hover:bg-red-500/30 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+             >
+                Open Settings
+             </button>
            </div>
         )}
 
@@ -256,7 +288,7 @@ const App: React.FC = () => {
                         setScenarioInput={setScenarioInput}
                         onGenerate={handleGenerateStory}
                         appState={appState}
-                        disabled={!persona || apiKeyError}
+                        disabled={!persona || !hasApiKey}
                     />
                   ) : (
                     <CameraControls 
@@ -265,7 +297,7 @@ const App: React.FC = () => {
                         onGenerate={handleGenerateStudio}
                         isGenerating={appState === AppState.GENERATING}
                         onReset={() => setCameraSettings({ rotation: 0, zoom: 0, vertical: 0, isWideAngle: false })}
-                        disabled={!persona || apiKeyError}
+                        disabled={!persona || !hasApiKey}
                     />
                   )}
                 </div>
