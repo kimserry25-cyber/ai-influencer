@@ -1,0 +1,5 @@
+{
+  "name": "InfluencerAI",
+  "description": "Generate consistent influencer photos in various scenarios using a single reference photo.",
+  "requestFramePermissions": []
+}
