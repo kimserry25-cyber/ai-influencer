@@ -36,31 +36,34 @@ const safeApiCall = async <T>(apiCall: () => Promise<T>): Promise<T> => {
 
 /**
  * Step 0: Generate a base Reference Image from scratch (Maker Mode)
- * UPGRADED: Uses gemini-3-pro-image-preview for realism
+ * UPGRADED: Uses gemini-3-pro-image-preview.
+ * STYLE UPDATE: "Beauty Photography", flawless skin, no imperfections.
  */
 export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<string> => {
   const ai = getAIClient();
   
   const prompt = `
-    Generate a hyper-realistic, raw portrait photo of a fashion model. 
-    Shot on 85mm lens, f/1.8. Highly detailed skin texture, realistic lighting, 8k resolution.
+    Generate a high-end beauty portrait of a fashion model. 
+    Style: Commercial fashion photography, 8k resolution, perfectly retouched.
     
     VISUAL ATTRIBUTES:
     - Gender: ${attrs.gender}
     - Age Appearance: Approx ${attrs.age} years old
     - Ethnicity/Heritage: ${attrs.ethnicity}
     - Physique: ${attrs.build} build, approx ${attrs.height}cm tall
-    - Face: ${attrs.eyeColor} eyes, natural skin texture with pores and slight imperfections for realism
+    - Face: ${attrs.eyeColor} eyes, flawless glowing skin, perfect makeup.
     
     HAIR & STYLE:
-    - Hair: ${attrs.hairColor}, ${attrs.hairStyle}
+    - Hair: ${attrs.hairColor}, ${attrs.hairStyle}, shiny and healthy hair texture.
     - Fashion: ${attrs.fashionStyle}
     - Vibe: ${attrs.vibe}
 
     COMPOSITION: 
     Professional studio photography, front-facing portrait or 3/4 view.
     Neutral, soft-focus background. 
-    Lighting: Cinematic studio lighting.
+    Lighting: Soft beauty dish lighting, flattering shadows, "golden hour" or studio softbox look.
+    
+    NEGATIVE PROMPT: Blemishes, pores, wrinkles, gritty texture, low quality, distortion, asymmetrical face.
   `;
 
   return safeApiCall(async () => {
@@ -72,7 +75,7 @@ export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<
       config: {
         imageConfig: {
           aspectRatio: "1:1",
-          imageSize: "2K" // High quality for Pro model
+          imageSize: "2K"
         }
       }
     });
@@ -200,18 +203,21 @@ export const planStory = async (persona: Persona, userScenario?: string): Promis
 
 /**
  * Helper: Generate image from prompt
- * UPGRADED: Uses gemini-3-pro-image-preview for consistency and realism
+ * UPGRADED: Uses gemini-3-pro-image-preview
+ * STYLE UPDATE: "Beauty Photography", smooth skin.
  */
 const generateSingleImage = async (referenceImageBase64: string, prompt: string): Promise<string> => {
   const ai = getAIClient();
   const fullPrompt = `
-    Generate a hyper-realistic, raw photography style influencer photo based on the reference person.
+    Generate a high-quality influencer photo based on the reference person.
     
     CRITICAL INSTRUCTION: Preserve the facial identity, hair, and body type of the reference image exactly.
     
     SCENE DESCRIPTION: ${prompt}
     
-    STYLE: RAW photo, 4k, cinematic, social media aesthetic, highly detailed skin texture, realistic lighting, no CGI look.
+    STYLE: Professional social media photography, 4k, cinematic lighting.
+    SKIN & TEXTURE: Flawless skin, beauty filter aesthetic, smooth texture, perfect lighting (no harsh shadows on face).
+    Avoid: Gritty realism, pores, acne, blemishes, low quality, distortion.
   `;
 
   return safeApiCall(async () => {
@@ -226,7 +232,7 @@ const generateSingleImage = async (referenceImageBase64: string, prompt: string)
       config: {
         imageConfig: {
           aspectRatio: "1:1",
-          imageSize: "2K" // High quality for Pro model
+          imageSize: "2K"
         }
       }
     });
@@ -268,13 +274,13 @@ export const generateStudioImage = async (
   else cameraDescription += "Eye-level shot, ";
 
   // Zoom
-  if (settings.zoom > 7) cameraDescription += "Extreme close-up on face, detailed features, ";
+  if (settings.zoom > 7) cameraDescription += "Extreme close-up on face, beauty shot, detailed makeup, ";
   else if (settings.zoom > 3) cameraDescription += "Medium close-up (head and shoulders), ";
   else cameraDescription += "Full body shot, ";
 
   // Lens
   if (settings.isWideAngle) cameraDescription += "Shot with a wide-angle lens (16mm), slightly distorted perspective, dynamic background, ";
-  else cameraDescription += "Shot with a portrait lens (85mm), compressed background, ";
+  else cameraDescription += "Shot with a portrait lens (85mm), compressed background, flattering perspective, ";
 
   const prompt = `
     Studio photography session of ${persona.nickname}. 
@@ -283,8 +289,8 @@ export const generateStudioImage = async (
     
     CAMERA SETUP: ${cameraDescription}
     
-    The subject is posing professionally in a studio or clean aesthetic environment.
-    Lighting should be high-quality studio lighting.
+    The subject is posing professionally in a studio.
+    Lighting: High-end fashion studio lighting, softbox, rim light, flawless beauty retouching style.
   `;
 
   const url = await generateSingleImage(referenceImageBase64, prompt);
