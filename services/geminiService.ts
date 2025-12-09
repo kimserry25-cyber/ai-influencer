@@ -36,19 +36,21 @@ const safeApiCall = async <T>(apiCall: () => Promise<T>): Promise<T> => {
 
 /**
  * Step 0: Generate a base Reference Image from scratch (Maker Mode)
+ * UPGRADED: Uses gemini-3-pro-image-preview for realism
  */
 export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<string> => {
   const ai = getAIClient();
   
   const prompt = `
-    Generate a high-quality, photorealistic portrait of a virtual fashion model.
+    Generate a hyper-realistic, raw portrait photo of a fashion model. 
+    Shot on 85mm lens, f/1.8. Highly detailed skin texture, realistic lighting, 8k resolution.
     
     VISUAL ATTRIBUTES:
     - Gender: ${attrs.gender}
     - Age Appearance: Approx ${attrs.age} years old
     - Ethnicity/Heritage: ${attrs.ethnicity}
     - Physique: ${attrs.build} build, approx ${attrs.height}cm tall
-    - Face: ${attrs.eyeColor} eyes, clear skin texture
+    - Face: ${attrs.eyeColor} eyes, natural skin texture with pores and slight imperfections for realism
     
     HAIR & STYLE:
     - Hair: ${attrs.hairColor}, ${attrs.hairStyle}
@@ -58,18 +60,19 @@ export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<
     COMPOSITION: 
     Professional studio photography, front-facing portrait or 3/4 view.
     Neutral, soft-focus background. 
-    Lighting: Cinematic studio lighting, 8k resolution, highly detailed.
+    Lighting: Cinematic studio lighting.
   `;
 
   return safeApiCall(async () => {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [{ text: prompt }]
       },
       config: {
         imageConfig: {
           aspectRatio: "1:1",
+          imageSize: "2K" // High quality for Pro model
         }
       }
     });
@@ -94,6 +97,7 @@ export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<
 
 /**
  * Step 1: Analyze the image to create a Detailed Persona (IN KOREAN)
+ * Uses gemini-2.5-flash for fast text analysis
  */
 export const analyzePersona = async (referenceImageBase64: string): Promise<Persona> => {
   const ai = getAIClient();
@@ -147,6 +151,7 @@ export const analyzePersona = async (referenceImageBase64: string): Promise<Pers
 
 /**
  * Step 2: Plan the story (Generate 8 prompts) using the detailed persona
+ * Uses gemini-2.5-flash for creative writing
  */
 export const planStory = async (persona: Persona, userScenario?: string): Promise<string[]> => {
   const ai = getAIClient();
@@ -195,27 +200,34 @@ export const planStory = async (persona: Persona, userScenario?: string): Promis
 
 /**
  * Helper: Generate image from prompt
+ * UPGRADED: Uses gemini-3-pro-image-preview for consistency and realism
  */
 const generateSingleImage = async (referenceImageBase64: string, prompt: string): Promise<string> => {
   const ai = getAIClient();
   const fullPrompt = `
-    Generate a photorealistic influencer photo based on the reference person.
+    Generate a hyper-realistic, raw photography style influencer photo based on the reference person.
     
     CRITICAL INSTRUCTION: Preserve the facial identity, hair, and body type of the reference image exactly.
     
     SCENE DESCRIPTION: ${prompt}
     
-    STYLE: 4k, cinematic, social media aesthetic, high detail.
+    STYLE: RAW photo, 4k, cinematic, social media aesthetic, highly detailed skin texture, realistic lighting, no CGI look.
   `;
 
   return safeApiCall(async () => {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [
           { text: fullPrompt },
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64(referenceImageBase64) } }
         ]
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: "1:1",
+          imageSize: "2K" // High quality for Pro model
+        }
       }
     });
 
