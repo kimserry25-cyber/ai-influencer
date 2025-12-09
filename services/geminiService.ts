@@ -6,12 +6,32 @@ const getAIClient = () => {
   // Check Local Storage first (User setting), then Env (Build setting)
   const apiKey = localStorage.getItem('GEMINI_API_KEY') || process.env.API_KEY;
   
-  // Return client with key (or empty string which will fail gracefully in the call if missing)
-  return new GoogleGenAI({ apiKey: apiKey || "" });
+  if (!apiKey || apiKey === '""') {
+    throw new Error("API_KEY_MISSING");
+  }
+  
+  return new GoogleGenAI({ apiKey });
 };
 
 const cleanBase64 = (base64Data: string): string => {
   return base64Data.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
+};
+
+// Wrapper to handle API errors gracefully
+const safeApiCall = async <T>(apiCall: () => Promise<T>): Promise<T> => {
+  try {
+    return await apiCall();
+  } catch (error: any) {
+    console.error("Gemini API Error Detail:", error);
+    
+    // Check for common API Key errors
+    const errorMsg = error.toString().toLowerCase();
+    if (errorMsg.includes("api key not valid") || errorMsg.includes("400") || errorMsg.includes("invalid_argument")) {
+      throw new Error("INVALID_API_KEY");
+    }
+    
+    throw error;
+  }
 };
 
 /**
@@ -20,8 +40,6 @@ const cleanBase64 = (base64Data: string): string => {
 export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<string> => {
   const ai = getAIClient();
   
-  // Construct a detailed prompt based on the new attributes
-  // Refined to focus on visual descriptions rather than strict biometrics to avoid safety filters
   const prompt = `
     Generate a high-quality, photorealistic portrait of a virtual fashion model.
     
@@ -43,7 +61,7 @@ export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<
     Lighting: Cinematic studio lighting, 8k resolution, highly detailed.
   `;
 
-  try {
+  return safeApiCall(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
@@ -52,12 +70,10 @@ export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<
       config: {
         imageConfig: {
           aspectRatio: "1:1",
-          // imageSize is not supported in gemini-2.5-flash-image
         }
       }
     });
 
-    // Safely access candidates and parts with optional chaining
     const candidate = response.candidates?.[0];
     const parts = candidate?.content?.parts;
 
@@ -67,17 +83,13 @@ export const generateReferenceImage = async (attrs: CreatorAttributes): Promise<
           return `data:image/png;base64,${part.inlineData.data}`;
         }
       }
-      // Check for text refusal
       const textPart = parts.find(p => p.text);
       if (textPart?.text) {
         throw new Error(`Model refused: ${textPart.text}`);
       }
     }
     throw new Error("No image generated.");
-  } catch (error: any) {
-    console.error("Reference Generation Error:", error);
-    throw new Error(error.message || "Failed to generate reference image");
-  }
+  });
 };
 
 /**
@@ -100,35 +112,37 @@ export const analyzePersona = async (referenceImageBase64: string): Promise<Pers
     8. **해시태그**: 관련 태그 3~4개
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: {
-      parts: [
-        { text: prompt },
-        { inlineData: { mimeType: 'image/jpeg', data: cleanBase64(referenceImageBase64) } }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          nickname: { type: Type.STRING },
-          age: { type: Type.STRING },
-          occupation: { type: Type.STRING },
-          personality: { type: Type.STRING },
-          lifestyle: { type: Type.STRING },
-          vibe: { type: Type.STRING },
-          description: { type: Type.STRING },
-          hashtags: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["nickname", "age", "occupation", "personality", "lifestyle", "vibe", "description", "hashtags"]
-      } as Schema
-    }
-  });
+  return safeApiCall(async () => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          { text: prompt },
+          { inlineData: { mimeType: 'image/jpeg', data: cleanBase64(referenceImageBase64) } }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            nickname: { type: Type.STRING },
+            age: { type: Type.STRING },
+            occupation: { type: Type.STRING },
+            personality: { type: Type.STRING },
+            lifestyle: { type: Type.STRING },
+            vibe: { type: Type.STRING },
+            description: { type: Type.STRING },
+            hashtags: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["nickname", "age", "occupation", "personality", "lifestyle", "vibe", "description", "hashtags"]
+        } as Schema
+      }
+    });
 
-  if (!response.text) throw new Error("Failed to generate persona");
-  return JSON.parse(response.text) as Persona;
+    if (!response.text) throw new Error("Failed to generate persona");
+    return JSON.parse(response.text) as Persona;
+  });
 };
 
 /**
@@ -161,20 +175,22 @@ export const planStory = async (persona: Persona, userScenario?: string): Promis
     - Make the scenes visually diverse (close-ups, wide shots, dynamic angles) while maintaining the same location context.
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: baseContext,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING }
-      } as Schema
-    }
-  });
+  return safeApiCall(async () => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: baseContext,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        } as Schema
+      }
+    });
 
-  if (!response.text) throw new Error("Failed to plan story");
-  return JSON.parse(response.text) as string[];
+    if (!response.text) throw new Error("Failed to plan story");
+    return JSON.parse(response.text) as string[];
+  });
 };
 
 /**
@@ -192,28 +208,29 @@ const generateSingleImage = async (referenceImageBase64: string, prompt: string)
     STYLE: 4k, cinematic, social media aesthetic, high detail.
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: {
-      parts: [
-        { text: fullPrompt },
-        { inlineData: { mimeType: 'image/jpeg', data: cleanBase64(referenceImageBase64) } }
-      ]
-    }
-  });
+  return safeApiCall(async () => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          { text: fullPrompt },
+          { inlineData: { mimeType: 'image/jpeg', data: cleanBase64(referenceImageBase64) } }
+        ]
+      }
+    });
 
-  // Safely access candidates and parts with optional chaining
-  const candidate = response.candidates?.[0];
-  const parts = candidate?.content?.parts;
+    const candidate = response.candidates?.[0];
+    const parts = candidate?.content?.parts;
 
-  if (parts) {
-    for (const part of parts) {
-      if (part.inlineData && part.inlineData.data) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData && part.inlineData.data) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
       }
     }
-  }
-  throw new Error("No image generated");
+    throw new Error("No image generated");
+  });
 };
 
 /**
@@ -224,7 +241,6 @@ export const generateStudioImage = async (
   settings: CameraSettings,
   persona: Persona
 ): Promise<{ url: string; prompt: string }> => {
-  const ai = getAIClient();
   
   // Construct camera prompt
   let cameraDescription = "";

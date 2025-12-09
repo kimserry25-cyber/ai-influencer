@@ -31,6 +31,7 @@ const App: React.FC = () => {
   
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [error, setError] = useState<string | null>(null);
+  const [isApiKeyError, setIsApiKeyError] = useState(false);
   
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -39,12 +40,33 @@ const App: React.FC = () => {
   const checkApiKey = () => {
     const localKey = localStorage.getItem('GEMINI_API_KEY');
     const envKey = process.env.API_KEY;
-    setHasApiKey(!!localKey || !!envKey);
+    // Check if key is present and not an empty string placeholder
+    setHasApiKey(!!localKey || (!!envKey && envKey !== '""'));
+    // Reset error state when key is checked/saved
+    if (!!localKey || (!!envKey && envKey !== '""')) {
+      setError(null);
+      setIsApiKeyError(false);
+    }
   };
 
   useEffect(() => {
     checkApiKey();
   }, []);
+
+  const handleError = (err: any, customMessage: string) => {
+    console.error(err);
+    const msg = err.message || "Unknown error";
+    
+    if (msg === "API_KEY_MISSING" || msg === "INVALID_API_KEY") {
+      setError("Valid API Key is required to generate content.");
+      setIsApiKeyError(true);
+      setHasApiKey(false); // Force UI update
+    } else {
+      setError(customMessage + (msg ? ` (${msg})` : ""));
+      setIsApiKeyError(false);
+    }
+    setAppState(AppState.ERROR);
+  };
 
   // When image uploads, analyze persona immediately
   const handleImageSelect = async (base64: string) => {
@@ -52,6 +74,8 @@ const App: React.FC = () => {
     setPersona(null); 
     setAppState(AppState.ANALYZING);
     setError(null);
+    setIsApiKeyError(false);
+
     // If in maker mode, switch to story mode to show results
     if (activeTab === 'maker') setActiveTab('story');
 
@@ -60,15 +84,14 @@ const App: React.FC = () => {
       setPersona(generatedPersona);
       setAppState(AppState.IDLE);
     } catch (err: any) {
-      console.error(err);
-      setError("Could not analyze persona. Please try a clearer photo or check your API key.");
-      setAppState(AppState.ERROR);
+      handleError(err, "Could not analyze persona.");
     }
   };
 
   const handleCreatePersona = async (attrs: CreatorAttributes) => {
-    setAppState(AppState.ANALYZING); // Reusing ANALYZING state for creation
+    setAppState(AppState.ANALYZING);
     setError(null);
+    setIsApiKeyError(false);
     setRefImage(null);
     setPersona(null);
 
@@ -82,11 +105,9 @@ const App: React.FC = () => {
       setPersona(generatedPersona);
       
       setAppState(AppState.IDLE);
-      setActiveTab('story'); // Switch to story mode to start using the new model
+      setActiveTab('story');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to create persona.");
-      setAppState(AppState.ERROR);
+      handleError(err, "Failed to create persona.");
     }
   };
 
@@ -95,6 +116,7 @@ const App: React.FC = () => {
     
     setAppState(AppState.PLANNING);
     setError(null);
+    setIsApiKeyError(false);
 
     try {
       const currentScenario = isAuto ? "" : scenarioInput;
@@ -121,9 +143,7 @@ const App: React.FC = () => {
       setTimeout(() => setAppState(AppState.IDLE), 1000);
 
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to generate story.");
-      setAppState(AppState.ERROR);
+      handleError(err, "Failed to generate story.");
     }
   };
 
@@ -131,6 +151,7 @@ const App: React.FC = () => {
     if (!refImage || !persona) return;
     setAppState(AppState.GENERATING);
     setError(null);
+    setIsApiKeyError(false);
 
     try {
       const result = await generateStudioImage(refImage, cameraSettings, persona);
@@ -150,8 +171,7 @@ const App: React.FC = () => {
       setAppState(AppState.SUCCESS);
       setTimeout(() => setAppState(AppState.IDLE), 1000);
     } catch (err: any) {
-      setError(err.message || "Failed to generate studio shot.");
-      setAppState(AppState.ERROR);
+      handleError(err, "Failed to generate studio shot.");
     }
   };
 
@@ -161,6 +181,8 @@ const App: React.FC = () => {
     setStories([]);
     setScenarioInput("");
     setAppState(AppState.IDLE);
+    setError(null);
+    setIsApiKeyError(false);
   };
 
   return (
@@ -208,10 +230,13 @@ const App: React.FC = () => {
             
             <button 
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors relative"
               title="Settings"
             >
               <Settings size={20} />
+              {!hasApiKey && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-white/20"></span>
+              )}
             </button>
           </div>
         </div>
@@ -221,7 +246,7 @@ const App: React.FC = () => {
       <main className="max-w-7xl mx-auto px-6 py-10">
         
         {!hasApiKey && (
-           <div className="mb-8 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3 text-red-200">
+           <div className="mb-8 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3 text-red-200 animate-in fade-in slide-in-from-top-4">
              <AlertTriangle className="shrink-0" />
              <div className="flex-1">
                <p className="font-bold">Missing API Key</p>
@@ -229,7 +254,7 @@ const App: React.FC = () => {
              </div>
              <button 
                 onClick={() => setIsSettingsOpen(true)}
-                className="bg-red-500/20 hover:bg-red-500/30 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                className="bg-red-500/20 hover:bg-red-500/30 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
              >
                 Open Settings
              </button>
@@ -305,8 +330,19 @@ const App: React.FC = () => {
             )}
 
             {error && (
-               <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">
-                 {error}
+               <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 text-red-200 text-sm rounded-lg flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
+                 <div className="flex items-start gap-2">
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5 text-red-400" />
+                    <span>{error}</span>
+                 </div>
+                 {isApiKeyError && (
+                   <button 
+                      onClick={() => setIsSettingsOpen(true)}
+                      className="self-end bg-red-500/20 hover:bg-red-500/30 text-white px-3 py-1.5 rounded text-xs font-semibold transition-colors"
+                   >
+                      Update API Key
+                   </button>
+                 )}
                </div>
             )}
           </div>
